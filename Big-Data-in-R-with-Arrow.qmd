@@ -1,0 +1,128 @@
+---
+title: "Big Data in R with Arrow"
+author: "Alvin, Lin"
+date: "`r Sys.Date()`"
+format:
+   html:
+     theme: flatly
+     self-contained: true
+toc: true
+toc-depth: 3
+toc-location: left
+execute:
+  echo: false
+  eval: false
+  warning: false 
+  keep-md: true
+---
+
+<!-- https://posit-conf-2023.github.io/arrow/ -->
+<!-- https://github.com/posit-conf-2023 -->
+
+```{r}
+#| message: false
+library(arrow)
+library(tidyverse)
+library(tictoc)
+```
+
+```{r}
+#| label: download and extract the data
+# options(timeout = 1800)
+# download.file(
+#   url = "https://github.com/posit-conf-2023/arrow/releases/download/v0.1.0/nyc-taxi-tiny.zip",
+#   destfile = here::here("nyc-taxi-tiny.zip")
+# )
+
+# Extract the partitioned parquet files from the zip folder:
+# unzip(
+#   zipfile = here::here("data/nyc-taxi-tiny.zip"),
+#   exdir = here::here("data/")
+# )
+```
+
+```{r}
+nyc_taxi <- open_dataset(here::here("data/nyc-taxi-tiny"))
+```
+
+```{r}
+nyc_taxi |> nrow()
+```
+
+```{r}
+tic()
+nyc_taxi |>
+  group_by(year) |>
+  summarise(
+    all_trips = n(),
+    shared_trips = sum(passenger_count > 1, na.rm = TRUE)
+  ) |>
+  mutate(pct_shared = shared_trips / all_trips * 100) |>
+  collect()
+toc()
+```
+
+```{r}
+nyc_taxi |> 
+  filter(year == 2019) |> 
+  group_by(month) |> 
+  summarise(longest_trip = max(trip_distance,na.rm = T),.groups = "drop") |> 
+  arrange(month) |> 
+  collect()
+```
+
+```{r}
+nyc_taxi |> 
+  filter(total_amount > 100) |> 
+  collect() |> 
+  nrow()
+```
+
+```{r}
+nyc_taxi |> 
+  filter(year >= 2016) |> 
+  distinct(pickup_latitude,pickup_longitude) |>
+  collect() |> 
+  nrow()
+```
+
+```{r}
+nyc_taxi |> 
+  filter(year >= 2020 & month >= 9 & str_ends(vendor_name,"S")) |> 
+  collect()
+```
+
+```{r}
+nyc_taxi |> 
+  mutate(vendor_name = str_replace_na(vendor_name,"No vendor")) |> 
+  collect()
+```
+
+```{r}
+nyc_taxi |> 
+  # mutate(vendor_name = if_else(is.na(vendor_name),"No vendor",vendor_name)) |> 
+  mutate(vendor_name = case_when(is.na(vendor_name) ~ "No vendor",
+                                 .default = vendor_name)) |> 
+  collect() |> View()
+```
+
+```{r}
+seattle_csv |> 
+  group_by(CheckoutYear) |> 
+  summarise(sum(Checkouts)) |> 
+  arrange(CheckoutYear)
+```
+
+```{r}
+seattle_csv |>
+     group_by(CheckoutType) |>
+     write_dataset(path = seattle_parquet_part,
+                   format = "parquet")
+```
+
+```{r}
+seattle_parquet_part |> 
+  group_by(CheckoutType) |> 
+  summarise(sum(Checkouts)) |> 
+  arrange(CheckoutYear)
+```
